@@ -1,0 +1,78 @@
+trigger:
+- master
+
+pool:
+  vmImage: 'ubuntu-20.04'
+
+variables:
+  projectName: 'TechnologyLeads.Ecosystem.ML.LanguageProcessingApi'
+  buildConfiguration: 'Release'
+  dockerRepositoryName: 'technologyleads/ecosystem-ml-languageprocessing-api'
+  feed: 'Ecosystem/Ecosystem.Latest'
+  targetWebProject: 'Api/LanguageProcessingApi.csproj'
+
+steps:
+- checkout: self  # self represents the repo where the initial Pipelines YAML file was found
+  lfs: true
+  
+- task: UseDotNet@2
+  inputs:
+    version: 5.x
+  displayName: 'Use .NET Core sdk 5.x'
+
+- task: PowerShell@2
+  displayName: Clean
+  inputs:
+    targetType: 'inline'
+    script: |
+      dotnet nuget locals all --clear
+
+- task: NuGetAuthenticate@0
+
+- task: DotNetCoreCLI@2
+  inputs:
+    command: 'restore'
+    projects: '**/*.csproj'
+    feedsToUse: 'select'
+    vstsFeed: '$(feed)'
+    arguments: '--no-cache --force'
+  displayName: 'Restore'
+
+- task: DotNetCoreCLI@2
+  inputs:
+    command: 'build'
+    projects: '**/*.csproj'
+    arguments: '--configuration $(buildConfiguration)'
+  displayName: 'Build $(buildConfiguration)'
+
+- task: CopyFiles@2
+  inputs:
+    SourceFolder: 'Infrastructure'
+    Contents: '**'
+    TargetFolder: '$(Build.ArtifactStagingDirectory)'
+
+- task: PublishBuildArtifacts@1
+  inputs:
+    pathtoPublish: '$(Build.ArtifactStagingDirectory)' 
+    artifactName: '$(projectName)' 
+  displayName: "Upload Artifacts"
+  
+- task: Docker@2
+  inputs:
+    repository: '$(dockerRepositoryName)'
+    command: 'build'
+    Dockerfile: '**/Dockerfile'
+    arguments: '--build-arg PAT=$(PAT)'
+    tags: |
+     latest
+     v1.0.0
+
+- task: Docker@2
+  displayName: Push
+  inputs:
+    command: push
+    containerRegistry: 'DockerHub'
+    repository: '$(dockerRepositoryName)'
+    tags: |
+     latest
+     v1.0.0
